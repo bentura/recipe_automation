@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  recipe_monitor:
+    build:
+      context: ./monitor_service
+      dockerfile: Dockerfile
+    container_name: recipe_monitor_app
+    volumes:
+      - ./data/input:/app/input # Incoming JPGs/PDFs
+      - ./data/output:/app/output # Generated JSON files
+      - ./data/archive:/app/archive # Processed original files
+      - ./logs:/app/logs # Log files
+    env_file:
+      - .env # For API keys and other secrets
+    depends_on:
+      - web_ui
+    restart: unless-stopped
+
+  web_ui:
+    build:
+      context: ./web_ui_service
+      dockerfile: Dockerfile
+    container_name: recipe_web_ui
+    ports:
+      - "8000:8000" # Map container port 8000 to host port 8000
+    volumes:
+      - ./logs:/app/logs # Access logs from monitor service
+    restart: unless-stopped
+
+volumes:
+  data:
+  logs:

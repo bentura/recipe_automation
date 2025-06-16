@@ -1,0 +1,6 @@
+watchdog
+Pillow
+pytesseract
+pdfminer.six
+google-generativeai # Or openai for OpenAI API
+python-dotenv # For loading .env file

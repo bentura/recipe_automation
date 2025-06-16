@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recipe Automation Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Recipe Processing Logs</h1>
+        <div class="log-viewer">
+            {% if logs %}
+                {% for log in logs %}
+                    <p class="log-entry {{ 'success' if 'Successfully processed' in log else ('error' if 'Error' in log or 'Failed' in log else 'info') }}">
+                        {{ log }}
+                    </p>
+                {% endfor %}
+            {% else %}
+                <p>No log entries to display yet. Drop a file into the input folder to start!</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

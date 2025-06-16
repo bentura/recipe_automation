@@ -1,0 +1,96 @@
+import os
+import time
+import logging
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from dotenv import load_dotenv
+
+import ocr_utils
+import llm_processor
+import file_manager
+
+# Load environment variables from .env file
+load_dotenv()
+
+# --- Configuration ---
+INPUT_DIR = "/app/input"
+OUTPUT_DIR = "/app/output"
+ARCHIVE_DIR = "/app/archive"
+LOG_DIR = "/app/logs"
+LOG_FILE = os.path.join(LOG_DIR, "recipe_processor.log")
+
+# Ensure directories exist
+os.makedirs(INPUT_DIR, exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(ARCHIVE_DIR, exist_ok=True)
+os.makedirs(LOG_DIR, exist_ok=True)
+
+# --- Logging Setup ---
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+class RecipeFileHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if event.is_directory:
+            return
+
+        file_path = event.src_path
+        file_name = os.path.basename(file_path)
+        logger.info(f"Detected new file: {file_name}")
+
+        try:
+            # 1. Extract Text
+            if file_name.lower().endswith(('.jpg', '.jpeg', '.png')):
+                raw_text = ocr_utils.extract_text_from_image(file_path)
+            elif file_name.lower().endswith('.pdf'):
+                raw_text = ocr_utils.extract_text_from_pdf(file_path)
+            else:
+                logger.warning(f"Skipping unsupported file type: {file_name}")
+                return
+
+            if not raw_text.strip():
+                logger.error(f"No text extracted from {file_name}. Skipping LLM processing.")
+                file_manager.move_to_archive(file_path, ARCHIVE_DIR, success=False)
+                return
+
+            logger.info(f"Text extracted from {file_name}. Sending to LLM...")
+
+            # 2. Process with LLM
+            json_output = llm_processor.get_recipe_json(raw_text)
+
+            if json_output:
+                # 3. Save JSON
+                output_file_name = os.path.splitext(file_name)[0] + ".json"
+                output_file_path = os.path.join(OUTPUT_DIR, output_file_name)
+                file_manager.save_json_file(json_output, output_file_path)
+                logger.info(f"Successfully processed {file_name}. JSON saved to {output_file_path}")
+                file_manager.move_to_archive(file_path, ARCHIVE_DIR, success=True)
+            else:
+                logger.error(f"LLM failed to generate JSON for {file_name}. No JSON saved.")
+                file_manager.move_to_archive(file_path, ARCHIVE_DIR, success=False)
+
+        except Exception as e:
+            logger.exception(f"Error processing {file_name}: {e}")
+            file_manager.move_to_archive(file_path, ARCHIVE_DIR, success=False)
+
+if __name__ == "__main__":
+    logger.info(f"Starting recipe monitor for {INPUT_DIR}...")
+    event_handler = RecipeFileHandler()
+    observer = Observer()
+    observer.schedule(event_handler, INPUT_DIR, recursive=False) # No need for recursive for simple input folder
+    observer.start()
+
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
+    logger.info("Recipe monitor stopped.")
