@@ -1,4 +1,3 @@
-# monitor_service/api_sender.py
 import requests
 import json
 import logging
@@ -6,26 +5,25 @@ import os
 
 logger = logging.getLogger(__name__)
 
-def send_recipe_to_api(recipe_json_data, api_url, username, password, send_notification_func=None, original_file_name="Unknown"):
+def send_recipe_to_api(recipe_json_data, api_url, bearer_token, send_notification_func=None, original_file_name="Unknown"):
     """
-    Sends the recipe JSON data as a POST request to a specified API endpoint with Basic Authentication.
+    Sends the recipe JSON data as a POST request to a specified API endpoint with Bearer Token Authentication.
 
     Args:
         recipe_json_data (dict): The dictionary containing the recipe data.
         api_url (str): The URL of the API endpoint.
-        username (str): Username for Basic Auth.
-        password (str): Password for Basic Auth.
+        bearer_token (str): The Bearer Token for authentication.
         send_notification_func (callable, optional): Function to send notifications (e.g., Pushover).
         original_file_name (str): The name of the original processed file for logging/notifications.
 
     Returns:
         bool: True if the request was successful (2xx status code), False otherwise.
     """
-    if not api_url or not username or not password:
-        logger.error("API URL, username, or password is not configured for sending recipe data. Check .env.")
+    if not api_url or not bearer_token:
+        logger.error("API URL or Bearer Token is not configured for sending recipe data. Check .env.")
         if send_notification_func:
             send_notification_func(
-                message=f"API Sender Config Error: API credentials/URL missing for '{original_file_name}'. Check .env.",
+                message=f"API Sender Config Error: API URL/Bearer Token missing for '{original_file_name}'. Check .env.",
                 title="API Send Failed: Config",
                 priority=1
             )
@@ -33,7 +31,8 @@ def send_recipe_to_api(recipe_json_data, api_url, username, password, send_notif
 
     headers = {
         "Content-Type": "application/json",
-        "Accept": "application/json" # Request JSON response
+        "Accept": "application/json", # Request JSON response
+        "Authorization": f"Bearer {bearer_token}" # Bearer Token header
     }
     
     try:
@@ -43,7 +42,8 @@ def send_recipe_to_api(recipe_json_data, api_url, username, password, send_notif
         logger.info(f"Attempting to send recipe JSON for '{original_file_name}' to API: {api_url}")
         logger.debug(f"JSON Payload: {json_payload}")
 
-        response = requests.post(api_url, data=json_payload, headers=headers, auth=(username, password))
+        # --- IMPORTANT: Removed auth parameter for requests.post() ---
+        response = requests.post(api_url, data=json_payload, headers=headers)
         response.raise_for_status() # Raises an HTTPError for 4xx/5xx responses
 
         logger.info(f"Successfully sent recipe JSON for '{original_file_name}'. Status: {response.status_code}")

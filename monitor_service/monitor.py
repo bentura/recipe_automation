@@ -1,7 +1,6 @@
 import os
 import time
 import logging
-import logging.handlers # Import logging.handlers for RotatingFileHandler
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from dotenv import load_dotenv
@@ -29,9 +28,8 @@ MAX_LOG_SIZE_MB = 5  # Max size of each log file in MB
 BACKUP_LOG_COUNT = 3 # Number of backup log files to keep
 
 # API Configuration (will be read from .env)
-API_ENDPOINT = os.getenv("API_ENDPOINT", "http://192.168.68.62:8002/api/recipe/") 
-API_USERNAME = os.getenv("API_USERNAME")
-API_PASSWORD = os.getenv("API_PASSWORD")
+API_ENDPOINT = os.getenv("API_ENDPOINT", "http://192.168.68.62:8002/api/recipe/") # Default or override in .env
+API_BEARER_TOKEN = os.getenv("API_BEARER_TOKEN") # NEW: Bearer Token
 
 # Ensure directories exist
 os.makedirs(INPUT_DIR, exist_ok=True)
@@ -40,7 +38,6 @@ os.makedirs(ARCHIVE_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # --- Logging Setup ---
-# Note: This print will appear before the file handler is fully configured
 print(f"DEBUG: Attempting to configure logging to file: {LOG_FILE} with rotation.")
 logging.basicConfig(
     level=logging.INFO,
@@ -88,7 +85,6 @@ class RecipeFileHandler(FileSystemEventHandler):
             logger.info(f"Text extracted from {file_name}. Proceeding to LLM conversion(s)...")
 
             # --- Create timestamped output subfolder ---
-            # Current time in Birmingham, UK
             now_bst = datetime.now() 
             timestamp_folder_name = now_bst.strftime("%Y-%m-%d_%H%M%S")
             
@@ -106,7 +102,7 @@ class RecipeFileHandler(FileSystemEventHandler):
 
 
             # Flag to track if API send was attempted and successful
-            api_send_successful = False
+            api_send_successful = False # Initialize to False
 
             # 2. Process with LLM for Schema.org
             logger.info("Generating Schema.org JSON...")
@@ -139,7 +135,7 @@ class RecipeFileHandler(FileSystemEventHandler):
                 if post_process_success:
                     logger.info("createRecipe JSON post-processing completed successfully.")
                     
-                    # --- Send to External API after post-processing ---
+                    # --- NEW: Send to External API after post-processing ---
                     logger.info("Attempting to send processed createRecipe JSON to external API...")
                     # Load the JSON from disk again to ensure post-processing changes are included
                     loaded_processed_json = file_manager.load_json_file(create_recipe_output_path) 
@@ -147,13 +143,12 @@ class RecipeFileHandler(FileSystemEventHandler):
                         api_send_successful = api_sender.send_recipe_to_api(
                             recipe_json_data=loaded_processed_json, 
                             api_url=API_ENDPOINT,
-                            username=API_USERNAME,
-                            password=API_PASSWORD,
+                            bearer_token=API_BEARER_TOKEN, # Pass Bearer Token
                             send_notification_func=notifier.send_pushover_notification,
                             original_file_name=file_name
                         )
                     else:
-                        api_send_successful = False
+                        api_send_successful = False # Set to False if loading failed
                         logger.error(f"Could not load post-processed JSON for '{file_name}' to send to API. API send skipped.")
                         notifier.send_pushover_notification(f"ERROR: Could not load post-processed JSON for '{file_name}' to send to API.", title="API Send Skipped", priority=1)
 
@@ -172,8 +167,8 @@ class RecipeFileHandler(FileSystemEventHandler):
 
 
             # 4. Move original file to archive
-            # Decide overall success based on at least one JSON being generated AND API send success if attempted
-            overall_success = bool(schema_org_json_output or (create_recipe_intermediate_json_output and api_send_successful)) # overall_success depends on API send now
+            # Decide overall success based on at least one JSON being generated AND API send success (if attempted for createRecipe)
+            overall_success = bool(schema_org_json_output or (create_recipe_intermediate_json_output and api_send_successful)) 
             file_manager.move_to_archive(file_path, ARCHIVE_DIR, success=overall_success)
             if overall_success:
                 notifier.send_pushover_notification(f"'{file_name}' processed (JSONs generated & API sent).", title="Recipe Processed Successfully", priority=-1) # Low priority success

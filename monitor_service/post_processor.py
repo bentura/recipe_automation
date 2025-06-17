@@ -58,9 +58,7 @@ def check_ingredient_anomalies(recipe_data):
 def post_process_create_recipe_json(json_file_path, send_notification_func=None):
     """
     Reads the intermediate createRecipe JSON, modifies servings_text if needed,
-    and adds anomaly warnings via notification.
-    The ingredient enrichment from main_ingredients_section is REMOVED
-    as all ingredients are now expected in the first step.
+    sets servings default, and adds anomaly warnings via notification.
     """
     try:
         with open(json_file_path, 'r', encoding='utf-8') as f:
@@ -85,10 +83,18 @@ def post_process_create_recipe_json(json_file_path, send_notification_func=None)
         else:
             logger.debug(f"No servings_text found or it's null for {os.path.basename(json_file_path)}")
 
-        # 2. REMOVED: Enrichment from main_ingredients_section
-        #    recipe_data = enrich_step_ingredients_from_main_list(recipe_data) # This function is removed below
+        # --- NEW: Set servings to 1 if empty or null ---
+        # Check if 'servings' key exists and if its value is None.
+        # If the key doesn't exist, or if its value is None, or if it's an empty string/0 (interpret as empty)
+        if "servings" not in recipe_data or recipe_data["servings"] is None or \
+           (isinstance(recipe_data["servings"], (int, float)) and recipe_data["servings"] == 0) or \
+           (isinstance(recipe_data["servings"], str) and not recipe_data["servings"].strip()):
+            
+            recipe_data["servings"] = 1
+            logger.info(f"Servings field was empty/null/zero for '{recipe_name}'. Defaulted to 1.")
+        # --- END NEW ---
 
-        # 3. Check for ingredient anomalies (now on the first step's ingredients)
+        # 2. Check for ingredient anomalies (now on the first step's ingredients)
         anomalies = check_ingredient_anomalies(recipe_data)
         if anomalies:
             logger.warning(f"Detected {len(anomalies)} potential ingredient anomalies for {os.path.basename(json_file_path)}")
@@ -119,5 +125,3 @@ def post_process_create_recipe_json(json_file_path, send_notification_func=None)
     except Exception as e:
         logger.exception(f"An unexpected error occurred during post-processing of {json_file_path}: {e}")
         return False
-
-# REMOVED the enrich_step_ingredients_from_main_list function as it's no longer needed.

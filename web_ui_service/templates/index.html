@@ -66,21 +66,22 @@
         }
 
         #videoElement, #photoCanvas {
-            width: 100%; /* Fill width of modal-content */
+            width: 100%; /* Take 100% width of the modal-content */
             height: auto; /* Maintain aspect ratio */
-            aspect-ratio: 3 / 4; /* Assign portrait aspect ratio directly to video/canvas */
-            object-fit: cover; /* Crops video/image to fill container (hides black bars) */
+            aspect-ratio: 3 / 4; /* Assign the portrait aspect ratio directly to the video/canvas */
+            object-fit: cover; /* Crops video/image to fill the portrait container */
             display: block;
             margin: 0 auto; /* Center horizontally */
             flex-shrink: 0; /* Prevent shrinking */
             flex-grow: 1; /* Allow growing */
             min-height: 200px; /* Minimum height for visibility */
-            border: 1px solid #eee; /* Subtle border */
+            /* Removed border: 1px solid #eee; */ /* REMOVED: To fix white lines */
+            /* Removed background-color: #333; */ /* REMOVED: To fix potential white lines */
         }
 
         /* Styling for buttons inside modals */
         .camera-buttons, #uploadButtons {
-            margin-top: 15px; 
+            margin-top: 15px; /* Spacing from video/canvas */
             margin-bottom: 5px;
             display: flex;
             flex-wrap: wrap; /* Allow buttons to wrap */
@@ -191,7 +192,7 @@
 
 
     <script>
-        // --- Log Viewer JavaScript (Existing Logic) ---
+        // --- Log Viewer JavaScript ---
         const logViewer = document.getElementById('logViewer');
         const refreshButton = document.getElementById('refreshButton');
         let lastFullLogContent = ''; 
@@ -233,12 +234,12 @@
         setInterval(fetchLogs, 3000); 
         refreshButton.addEventListener('click', fetchLogs);
 
-        // --- Modal Control JavaScript (NEW Logic) ---
+        // --- Modal Control JavaScript ---
         const cameraModal = document.getElementById('cameraModal');
         const uploadModal = document.getElementById('uploadModal');
         const openCameraButton = document.getElementById('openCameraButton');
         const openUploadButton = document.getElementById('openUploadButton');
-        const closeButtons = document.querySelectorAll('.close-button'); // Select all close buttons
+        const closeButtons = document.querySelectorAll('.close-button');
 
         function openModal(modalElement) {
             modalElement.style.display = 'flex'; // Use flex to center content
@@ -260,7 +261,7 @@
             }
             // Reset upload modal
             if (modalElement === uploadModal) {
-                fileInput.value = ''; // Clear selected file from input
+                fileInput.value = ''; // Clear selected file
                 selectedFileName.textContent = 'No file selected.';
                 imagePreview.style.display = 'none';
                 uploadStatus.textContent = '';
@@ -268,11 +269,9 @@
             }
         }
 
-        // Event listeners for main page buttons to open modals
         openCameraButton.addEventListener('click', () => openModal(cameraModal));
         openUploadButton.addEventListener('click', () => openModal(uploadModal));
 
-        // Event listeners for all close buttons (inside modals)
         closeButtons.forEach(button => {
             button.addEventListener('click', () => {
                 const modalId = button.dataset.modal; // Get the id of the modal to close from data-modal attribute
@@ -281,7 +280,7 @@
             });
         });
 
-        // Close modal if user clicks outside the modal content (on the overlay)
+        // Close modal if user clicks outside the modal content
         window.addEventListener('click', (event) => {
             if (event.target === cameraModal) {
                 closeModal(cameraModal);
@@ -292,7 +291,7 @@
         });
 
 
-        // --- Camera & Photo Upload JavaScript (Existing Logic, slightly refined for modal) ---
+        // --- Camera & Photo Upload JavaScript (Existing Logic, slightly refined) ---
         const videoElement = document.getElementById('videoElement');
         const photoCanvas = document.getElementById('photoCanvas');
         const startButton = document.getElementById('startButton');
@@ -301,7 +300,7 @@
         const retakePictureButton = document.getElementById('retakePictureButton');
         const captureStatus = document.getElementById('captureStatus');
         const ctx = photoCanvas.getContext('2d');
-        let stream; // To hold the media stream (declared globally in this section)
+        let stream; // To hold the media stream
 
         // Function to start the camera
         startButton.addEventListener('click', async () => {
