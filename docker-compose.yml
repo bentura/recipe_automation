@@ -23,9 +23,11 @@ services:
     ports:
       - "8000:8000" # Map container port 8000 to host port 8000
     volumes:
+      - /mnt/recipe_automation/data/input:/app/input # <--- ADD THIS LINE ---
       - /mnt/recipe_automation/data/logs:/app/logs # Access logs from monitor service
     restart: unless-stopped
 
 volumes:
-  data:
-  logs:
+  data: # This named volume definition is not actually used with absolute paths above,
+        # but can remain for other purposes or if you switch to named volumes later.
+  logs: # Same as above

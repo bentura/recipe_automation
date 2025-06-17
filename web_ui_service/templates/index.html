@@ -5,21 +5,503 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Recipe Automation Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <style>
+        /* General Modal Styling */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.4); /* Black w/ opacity */
+            justify-content: center; /* Center content horizontally */
+            align-items: center; /* Center content vertically */
+        }
+
+        .modal-content {
+            background-color: #fefefe;
+            margin: auto; /* For browsers that don't support flexbox centering well */
+            padding: 20px;
+            border: 1px solid #888;
+            border-radius: 10px;
+            width: 90%; /* Responsive width */
+            max-width: 700px; /* Max width for desktop */
+            box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2), 0 6px 20px 0 rgba(0,0,0,0.19);
+            position: relative; /* For close button absolute positioning */
+            display: flex; /* Use flexbox for content inside modal */
+            flex-direction: column;
+            align-items: center; /* Center content horizontally */
+        }
+
+        .close-button {
+            color: #aaa;
+            float: right; /* To position it at top-right, but position: absolute is used */
+            font-size: 28px;
+            font-weight: bold;
+            position: absolute; /* Position relative to modal-content */
+            top: 10px;
+            right: 15px;
+            cursor: pointer;
+        }
+
+        .close-button:hover,
+        .close-button:focus {
+            color: black;
+            text-decoration: none;
+            cursor: pointer;
+        }
+
+        /* Styling for camera elements (inside modal) */
+        #cameraModal .modal-content {
+            /* These styles are for the content inside the camera modal to force portrait */
+            width: clamp(300px, 75vw, 600px); /* Min 300px, 75% vw, max 600px */
+            aspect-ratio: 3 / 4; /* Maintain portrait aspect ratio */
+            min-height: 400px; /* Ensure minimum height */
+            max-height: 90vh; /* Limit height on very tall screens */
+            padding-bottom: 50px; /* Give space for buttons at the bottom */
+            /* Removed padding from top/bottom if it caused issues with aspect-ratio */
+        }
+
+        #videoElement, #photoCanvas {
+            width: 100%; /* Fill width of modal-content */
+            height: auto; /* Maintain aspect ratio */
+            aspect-ratio: 3 / 4; /* Assign portrait aspect ratio directly to video/canvas */
+            object-fit: cover; /* Crops video/image to fill container (hides black bars) */
+            display: block;
+            margin: 0 auto; /* Center horizontally */
+            flex-shrink: 0; /* Prevent shrinking */
+            flex-grow: 1; /* Allow growing */
+            min-height: 200px; /* Minimum height for visibility */
+            border: 1px solid #eee; /* Subtle border */
+        }
+
+        /* Styling for buttons inside modals */
+        .camera-buttons, #uploadButtons {
+            margin-top: 15px; 
+            margin-bottom: 5px;
+            display: flex;
+            flex-wrap: wrap; /* Allow buttons to wrap */
+            justify-content: center; /* Center buttons horizontally */
+            width: 100%;
+        }
+
+        .camera-buttons button, #uploadButtons button, #fileInputWrapper button {
+            padding: 12px 20px;
+            margin: 8px;
+            font-size: 1.1em;
+            cursor: pointer;
+            border-radius: 5px;
+            border: 1px solid #007bff;
+            background-color: #007bff;
+            color: white;
+            transition: background-color 0.3s;
+            flex-grow: 1; /* Allow buttons to grow and fill space */
+            max-width: 48%; /* Limit max width for a two-column layout on wider screens */
+        }
+        .camera-buttons button:hover, #uploadButtons button:hover, #fileInputWrapper button:hover {
+            background-color: #0056b3;
+        }
+
+        #captureStatus, #uploadStatus {
+            margin-top: 10px;
+            font-weight: bold;
+            color: #333;
+            width: 100%;
+            text-align: center;
+        }
+
+        /* Styling for file upload specific elements */
+        #imagePreview {
+            max-width: 100%;
+            max-height: 300px; /* Limit height of preview image */
+            display: none; /* Hidden by default */
+            margin-top: 15px;
+            border: 1px solid #ccc;
+        }
+        #fileInput {
+            display: none; /* Hide the default file input button */
+        }
+        #selectedFileName {
+            margin: 10px 0;
+            font-style: italic;
+            color: #555;
+            width: 100%;
+            text-align: center;
+        }
+        #fileInputWrapper {
+            margin-bottom: 10px;
+            width: 100%;
+            text-align: center;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
-        <h1>Recipe Processing Logs</h1>
-        <div class="log-viewer">
-            {% if logs %}
-                {% for log in logs %}
-                    <p class="log-entry {{ 'success' if 'Successfully processed' in log else ('error' if 'Error' in log or 'Failed' in log else 'info') }}">
-                        {{ log }}
-                    </p>
-                {% endfor %}
-            {% else %}
-                <p>No log entries to display yet. Drop a file into the input folder to start!</p>
-            {% endif %}
+        <h1>Recipe Processing Dashboard</h1>
+        
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button id="openCameraButton" style="padding: 15px 30px; font-size: 1.2em; margin-right: 15px; background-color: #28a745; border-color: #28a745;">Take New Photo</button>
+            <button id="openUploadButton" style="padding: 15px 30px; font-size: 1.2em; background-color: #ffc107; border-color: #ffc107; color: #333;">Upload Photo</button>
+        </div>
+
+        <hr style="margin: 30px 0;">
+
+        <h2>Processing Logs <button id="refreshButton" style="margin-left: 10px; padding: 5px 10px;">Manual Refresh</button></h2>
+        
+        <div class="log-viewer" id="logViewer">
+            <p>Loading logs...</p>
         </div>
     </div>
+
+    <div id="cameraModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" data-modal="cameraModal">&times;</span>
+            <h2>Take a Recipe Photo</h2>
+            <video id="videoElement" autoplay playsinline></video>
+            <canvas id="photoCanvas"></canvas> 
+            <div class="camera-buttons">
+                <button id="startButton">Start Camera</button>
+                <button id="takePictureButton" disabled>Take Picture</button>
+                <button id="sendPictureButton" disabled>Send Photo to Monitor</button>
+                <button id="retakePictureButton" disabled>Retake</button>
+            </div>
+            <p id="captureStatus"></p>
+        </div>
+    </div>
+
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <span class="close-button" data-modal="uploadModal">&times;</span>
+            <h2>Upload a Recipe Photo</h2>
+            <div id="fileInputWrapper">
+                <input type="file" id="fileInput" accept="image/*,application/pdf">
+                <button id="selectFileButton">Select File</button>
+            </div>
+            <img id="imagePreview" alt="Selected Image Preview">
+            <p id="selectedFileName">No file selected.</p>
+            <div id="uploadButtons">
+                <button id="sendUploadButton" disabled>Upload Photo to Monitor</button>
+            </div>
+            <p id="uploadStatus"></p>
+        </div>
+    </div>
+
+
+    <script>
+        // --- Log Viewer JavaScript (Existing Logic) ---
+        const logViewer = document.getElementById('logViewer');
+        const refreshButton = document.getElementById('refreshButton');
+        let lastFullLogContent = ''; 
+
+        function getLogClass(logLine) {
+            if (logLine.includes('Successfully processed')) { return 'success'; } 
+            else if (logLine.includes('Error') || logLine.includes('Failed') || logLine.includes('CRITICAL')) { return 'error'; } 
+            else if (logLine.includes('WARNING')) { return 'warning'; } 
+            else { return 'info'; }
+        }
+
+        async function fetchLogs() {
+            try {
+                const response = await fetch('/api/logs'); 
+                const data = await response.json();
+                const newFullLogContent = data.log_content; 
+
+                if (newFullLogContent !== lastFullLogContent) {
+                    const lines = newFullLogContent.split('\n').filter(line => line.trim() !== '');
+                    logViewer.innerHTML = ''; 
+                    for (let i = lines.length - 1; i >= 0; i--) {
+                        const logLine = lines[i];
+                        const p = document.createElement('p');
+                        p.className = 'log-entry';
+                        p.classList.add(getLogClass(logLine));
+                        p.textContent = logLine;
+                        logViewer.appendChild(p);
+                    }
+                    lastFullLogContent = newFullLogContent; 
+                }
+            } catch (error) {
+                console.error('Error fetching logs:', error);
+                if (logViewer.textContent === 'Loading logs...' || logViewer.textContent.includes('Error loading logs')) {
+                     logViewer.innerHTML = `<p class="log-entry error">Error loading logs: ${error.message}. Retrying...</p>`;
+                }
+            }
+        }
+        fetchLogs();
+        setInterval(fetchLogs, 3000); 
+        refreshButton.addEventListener('click', fetchLogs);
+
+        // --- Modal Control JavaScript (NEW Logic) ---
+        const cameraModal = document.getElementById('cameraModal');
+        const uploadModal = document.getElementById('uploadModal');
+        const openCameraButton = document.getElementById('openCameraButton');
+        const openUploadButton = document.getElementById('openUploadButton');
+        const closeButtons = document.querySelectorAll('.close-button'); // Select all close buttons
+
+        function openModal(modalElement) {
+            modalElement.style.display = 'flex'; // Use flex to center content
+        }
+
+        function closeModal(modalElement) {
+            modalElement.style.display = 'none';
+            // Stop camera stream if closing camera modal
+            if (modalElement === cameraModal && stream) { // 'stream' is defined later in camera logic
+                stream.getTracks().forEach(track => track.stop());
+                videoElement.srcObject = null;
+                startButton.disabled = false;
+                takePictureButton.disabled = true;
+                sendPictureButton.disabled = true;
+                retakePictureButton.disabled = true;
+                captureStatus.textContent = '';
+                videoElement.style.display = 'block'; // Reset to show video placeholder
+                photoCanvas.style.display = 'none'; // Hide canvas
+            }
+            // Reset upload modal
+            if (modalElement === uploadModal) {
+                fileInput.value = ''; // Clear selected file from input
+                selectedFileName.textContent = 'No file selected.';
+                imagePreview.style.display = 'none';
+                uploadStatus.textContent = '';
+                sendUploadButton.disabled = true;
+            }
+        }
+
+        // Event listeners for main page buttons to open modals
+        openCameraButton.addEventListener('click', () => openModal(cameraModal));
+        openUploadButton.addEventListener('click', () => openModal(uploadModal));
+
+        // Event listeners for all close buttons (inside modals)
+        closeButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const modalId = button.dataset.modal; // Get the id of the modal to close from data-modal attribute
+                const modalElement = document.getElementById(modalId);
+                closeModal(modalElement);
+            });
+        });
+
+        // Close modal if user clicks outside the modal content (on the overlay)
+        window.addEventListener('click', (event) => {
+            if (event.target === cameraModal) {
+                closeModal(cameraModal);
+            }
+            if (event.target === uploadModal) {
+                closeModal(uploadModal);
+            }
+        });
+
+
+        // --- Camera & Photo Upload JavaScript (Existing Logic, slightly refined for modal) ---
+        const videoElement = document.getElementById('videoElement');
+        const photoCanvas = document.getElementById('photoCanvas');
+        const startButton = document.getElementById('startButton');
+        const takePictureButton = document.getElementById('takePictureButton');
+        const sendPictureButton = document.getElementById('sendPictureButton');
+        const retakePictureButton = document.getElementById('retakePictureButton');
+        const captureStatus = document.getElementById('captureStatus');
+        const ctx = photoCanvas.getContext('2d');
+        let stream; // To hold the media stream (declared globally in this section)
+
+        // Function to start the camera
+        startButton.addEventListener('click', async () => {
+            captureStatus.textContent = 'Starting camera...';
+            try {
+                // Request environment-facing camera (rear camera on phone)
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } }); 
+                videoElement.srcObject = stream;
+                videoElement.style.display = 'block'; // Show video
+                photoCanvas.style.display = 'none'; // Hide canvas initially
+                startButton.disabled = true;
+                takePictureButton.disabled = false;
+                sendPictureButton.disabled = true;
+                retakePictureButton.disabled = true;
+                captureStatus.textContent = 'Camera active. Frame your recipe.';
+            } catch (err) {
+                console.error('Error accessing camera:', err);
+                captureStatus.textContent = `Error starting camera: ${err.name || err.message}. Make sure camera permissions are granted.`;
+            }
+        });
+
+        // Function to take a picture
+        takePictureButton.addEventListener('click', () => {
+            if (stream) {
+                const videoWidth = videoElement.videoWidth;
+                const videoHeight = videoElement.videoHeight;
+                const desiredAspectRatio = 3 / 4; // Target portrait aspect ratio (width:height)
+
+                let sourceX = 0;
+                let sourceY = 0;
+                let sourceWidth = videoWidth;
+                let sourceHeight = videoHeight;
+                
+                // Calculate dimensions for cropping to desired portrait aspect ratio
+                const videoAspectRatio = videoWidth / videoHeight;
+
+                if (videoAspectRatio > desiredAspectRatio) {
+                    // Video is wider than desired portrait aspect ratio (e.g., 16:9 video on a 3:4 canvas)
+                    // Crop horizontally from the video to fit the portrait aspect ratio
+                    sourceHeight = videoHeight;
+                    sourceWidth = videoHeight * desiredAspectRatio;
+                    sourceX = (videoWidth - sourceWidth) / 2; // Center the crop horizontally
+                    sourceY = 0;
+                } else {
+                    // Video is taller/narrower than desired portrait aspect ratio (or already portrait/square)
+                    // Crop vertically from the video
+                    sourceWidth = videoWidth;
+                    sourceHeight = videoWidth / desiredAspectRatio;
+                    sourceY = (videoHeight - sourceHeight) / 2; // Center the crop vertically
+                    sourceX = 0;
+                }
+
+                // Set canvas dimensions to the exact dimensions of the cropped source
+                // This ensures the saved image is truly portrait.
+                photoCanvas.width = sourceWidth;
+                photoCanvas.height = sourceHeight;
+
+                // Draw the cropped section of the video frame onto the canvas
+                ctx.drawImage(videoElement, 
+                              sourceX, sourceY, sourceWidth, sourceHeight, // Source rectangle
+                              0, 0, photoCanvas.width, photoCanvas.height // Destination rectangle (onto canvas)
+                );
+                
+                // Stop video stream
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+                videoElement.srcObject = null;
+                videoElement.style.display = 'none'; // Hide video
+                photoCanvas.style.display = 'block'; // Show canvas with captured image
+                
+                takePictureButton.disabled = true;
+                sendPictureButton.disabled = false; // Enable send button
+                retakePictureButton.disabled = false; // Enable retake button
+                captureStatus.textContent = 'Picture captured in portrait! Click "Send Photo" or "Retake".';
+            }
+        });
+
+        // Function to send the captured picture
+        sendPictureButton.addEventListener('click', async () => {
+            if (photoCanvas.style.display === 'block') { // Only send if a picture is displayed
+                captureStatus.textContent = 'Sending photo...';
+                sendPictureButton.disabled = true; // Disable to prevent double-click
+                
+                photoCanvas.toBlob(async (blob) => {
+                    if (blob) {
+                        // Re-using general upload function
+                        await uploadFile(blob, `webcam_recipe_${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`, captureStatus);
+                        // Reset camera modal after upload attempt
+                        closeModal(cameraModal); // Close the modal after sending
+                    } else {
+                        captureStatus.textContent = 'Failed to create image blob.';
+                        sendPictureButton.disabled = false;
+                    }
+                }, 'image/jpeg', 0.9); // Specify JPEG format and quality (0.0 to 1.0)
+            }
+        });
+
+        // Function to retake a picture (restarts camera)
+        retakePictureButton.addEventListener('click', () => {
+            if (stream) { // Stop existing stream if it somehow didn't stop before
+                stream.getTracks().forEach(track => track.stop());
+            }
+            videoElement.srcObject = null; // Clear previous stream
+            startButton.disabled = false; // Re-enable start button
+            takePictureButton.disabled = true;
+            sendPictureButton.disabled = true;
+            retakePictureButton.disabled = true;
+            photoCanvas.style.display = 'none'; // Hide canvas
+            videoElement.style.display = 'block'; // Show video placeholder
+            captureStatus.textContent = 'Ready to retake. Click "Start Camera".';
+        });
+
+
+        // --- Upload Photo from Local Storage JavaScript (NEW Logic) ---
+        const fileInput = document.getElementById('fileInput');
+        const selectFileButton = document.getElementById('selectFileButton');
+        const selectedFileName = document.getElementById('selectedFileName');
+        const imagePreview = document.getElementById('imagePreview');
+        const sendUploadButton = document.getElementById('sendUploadButton');
+        const uploadStatus = document.getElementById('uploadStatus');
+        let selectedFile = null; // To hold the selected file object
+
+        // Trigger hidden file input
+        selectFileButton.addEventListener('click', () => {
+            fileInput.click();
+        });
+
+        // Handle file selection
+        fileInput.addEventListener('change', (event) => {
+            selectedFile = event.target.files[0];
+            if (selectedFile) {
+                selectedFileName.textContent = `Selected: ${selectedFile.name}`;
+                sendUploadButton.disabled = false; // Enable send button
+                uploadStatus.textContent = ''; // Clear previous status
+
+                // Show image preview if it's an image
+                if (selectedFile.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        imagePreview.src = e.target.result;
+                        imagePreview.style.display = 'block';
+                    };
+                    reader.readAsDataURL(selectedFile);
+                } else {
+                    imagePreview.style.display = 'none'; // Hide preview for non-images (like PDFs)
+                }
+            } else {
+                selectedFileName.textContent = 'No file selected.';
+                sendUploadButton.disabled = true;
+                imagePreview.style.display = 'none';
+            }
+        });
+
+        // Send uploaded file
+        sendUploadButton.addEventListener('click', async () => {
+            if (selectedFile) {
+                uploadStatus.textContent = 'Uploading file...';
+                sendUploadButton.disabled = true; // Disable to prevent double-click
+
+                // Re-using general upload function
+                await uploadFile(selectedFile, selectedFile.name, uploadStatus);
+                // Reset upload modal after upload attempt
+                closeModal(uploadModal); // Close the modal after sending
+            } else {
+                uploadStatus.textContent = 'No file selected to upload.';
+                sendUploadButton.disabled = false;
+            }
+        });
+
+        // --- Generic File Upload Function (Used by both camera and file upload) ---
+        async function uploadFile(fileBlob, filename, statusElement) {
+            const formData = new FormData();
+            formData.append('photo', fileBlob, filename); // 'photo' must match request.files['photo'] in Flask
+
+            try {
+                const response = await fetch('/upload_photo', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const result = await response.json();
+                
+                if (response.ok) {
+                    statusElement.textContent = `Upload successful! Monitor will process '${result.filename}'.`;
+                    // Fetch logs to show immediate update
+                    fetchLogs(); 
+                } else {
+                    statusElement.textContent = `Upload failed: ${result.message || 'Unknown error'}`;
+                }
+            } catch (err) {
+                console.error('Upload failed:', err);
+                statusElement.textContent = `Upload failed (network error): ${err.message}`;
+            } finally {
+                // Re-enable send button if applicable (this function is called by specific handlers)
+                // For webcam, buttons are reset by closeModal, for file upload, re-enable if failed
+                if (sendUploadButton.disabled && statusElement === uploadStatus && !response.ok) {
+                    sendUploadButton.disabled = false;
+                }
+            }
+        }
+    </script>
 </body>
 </html>

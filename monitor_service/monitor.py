@@ -1,6 +1,7 @@
 import os
 import time
 import logging
+import logging.handlers # Import logging.handlers for RotatingFileHandler
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from dotenv import load_dotenv
@@ -23,6 +24,10 @@ ARCHIVE_DIR = "/app/archive"
 LOG_DIR = "/app/logs"
 LOG_FILE = os.path.join(LOG_DIR, "recipe_processor.log")
 
+# Log Rotation Configuration
+MAX_LOG_SIZE_MB = 5  # Max size of each log file in MB
+BACKUP_LOG_COUNT = 3 # Number of backup log files to keep
+
 # API Configuration (will be read from .env)
 API_ENDPOINT = os.getenv("API_ENDPOINT", "http://192.168.68.62:8002/api/recipe/") 
 API_USERNAME = os.getenv("API_USERNAME")
@@ -35,12 +40,19 @@ os.makedirs(ARCHIVE_DIR, exist_ok=True)
 os.makedirs(LOG_DIR, exist_ok=True)
 
 # --- Logging Setup ---
-print(f"DEBUG: Attempting to configure logging to file: {LOG_FILE}")
+# Note: This print will appear before the file handler is fully configured
+print(f"DEBUG: Attempting to configure logging to file: {LOG_FILE} with rotation.")
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler(LOG_FILE),
+        # Use RotatingFileHandler instead of FileHandler
+        logging.handlers.RotatingFileHandler(
+            LOG_FILE,
+            maxBytes=MAX_LOG_SIZE_MB * 1024 * 1024, # Convert MB to bytes
+            backupCount=BACKUP_LOG_COUNT,
+            encoding='utf-8'
+        ),
         logging.StreamHandler()
     ]
 )
@@ -85,14 +97,12 @@ class RecipeFileHandler(FileSystemEventHandler):
             logger.info(f"Created output subfolder: {current_output_sub_dir}")
             # --- End timestamped subfolder setup ---
 
-            # --- MOVE RAW OCR TEXT SAVING HERE ---
-            # Now save the raw OCR text into the newly created timestamped subfolder
+            # Save raw OCR text for debugging (now goes into the timestamped folder)
             raw_text_output_file = os.path.join(current_output_sub_dir, os.path.splitext(file_name)[0] + "_raw_ocr.txt")
             logger.debug(f"Attempting to save raw OCR text to: {raw_text_output_file}")
             with open(raw_text_output_file, 'w', encoding='utf-8') as f:
                 f.write(raw_text)
             logger.info(f"Raw OCR text saved to: {raw_text_output_file}")
-            # --- END MOVE ---
 
 
             # Flag to track if API send was attempted and successful

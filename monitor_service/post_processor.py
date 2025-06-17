@@ -9,11 +9,9 @@ SPICE_ANOMALY_THRESHOLDS = {
     "cayenne pepper": {"unit_keywords": ["tbsp", "tablespoon"], "amount_threshold": 0.5, "suggested_unit": "tsp"},
     "hot curry powder": {"unit_keywords": ["tbsp", "tablespoon"], "amount_threshold": 1.0, "suggested_unit": "tsp"},
     "chilli powder": {"unit_keywords": ["tbsp", "tablespoon"], "amount_threshold": 1.5, "suggested_unit": "tsp"},
-    "saffron": {"unit_keywords": ["g", "gram", "ml", "cup", "tsp", "teaspoon", "tbsp", "tablespoon"], "amount_threshold": 0.5, "suggested_unit": "pinch"}, # Saffron is very potent/expensive
+    "saffron": {"unit_keywords": ["g", "gram", "ml", "cup", "tsp", "teaspoon", "tbsp", "tablespoon"], "amount_threshold": 0.5, "suggested_unit": "pinch"}, 
     # Add more spices/herbs and their max sensible amounts here
 }
-# --- END NEW ---
-
 
 def check_ingredient_anomalies(recipe_data):
     """
@@ -25,23 +23,24 @@ def check_ingredient_anomalies(recipe_data):
         return warnings
 
     for step_index, step in enumerate(recipe_data["steps"]):
-        if "ingredients" in step and step["ingredients"] is not None:
+        # Only check ingredients in the first step if that's where they're all supposed to be
+        if step_index == 0 and "ingredients" in step and step["ingredients"] is not None:
             for ing_index, ingredient in enumerate(step["ingredients"]):
                 food_name = ingredient.get("food", {}).get("name", "").lower()
                 unit_name = ingredient.get("unit", {}).get("name", "").lower()
-                amount_str = ingredient.get("amount") # Amount is a string from LLM output
+                amount_str = ingredient.get("amount")
 
-                if not food_name or not amount_str:
-                    continue # Skip if essential info is missing
+                if not food_name or amount_str is None:
+                    continue
 
                 try:
-                    amount_val = float(amount_str) # Convert amount to float for comparison
+                    amount_val = float(amount_str) 
                 except (ValueError, TypeError):
                     logger.warning(f"Could not convert amount '{amount_str}' to float for validation. Skipping anomaly check for this ingredient.")
                     continue
 
                 for spice, thresholds in SPICE_ANOMALY_THRESHOLDS.items():
-                    if spice in food_name: # Check if the spice name is part of the food name
+                    if spice in food_name:
                         is_unit_problematic = any(keyword in unit_name for keyword in thresholds["unit_keywords"])
                         
                         if is_unit_problematic and amount_val >= thresholds["amount_threshold"]:
@@ -52,20 +51,16 @@ def check_ingredient_anomalies(recipe_data):
                             )
                             warnings.append(warning_message)
                             logger.warning(warning_message)
-                        break # Stop checking other spices for this ingredient once a match is found
+                        break
     return warnings
 
 
 def post_process_create_recipe_json(json_file_path, send_notification_func=None):
     """
     Reads the intermediate createRecipe JSON, modifies servings_text if needed,
-    and checks for ingredient anomalies, sending notifications if provided.
-
-    Args:
-        json_file_path (str): Path to the JSON file to process.
-        send_notification_func (callable, optional): A function to call to send notifications
-                                                      (e.g., notifier.send_pushover_notification).
-                                                      It should accept (message, title, priority).
+    and adds anomaly warnings via notification.
+    The ingredient enrichment from main_ingredients_section is REMOVED
+    as all ingredients are now expected in the first step.
     """
     try:
         with open(json_file_path, 'r', encoding='utf-8') as f:
@@ -90,7 +85,10 @@ def post_process_create_recipe_json(json_file_path, send_notification_func=None)
         else:
             logger.debug(f"No servings_text found or it's null for {os.path.basename(json_file_path)}")
 
-        # 2. Check for ingredient anomalies
+        # 2. REMOVED: Enrichment from main_ingredients_section
+        #    recipe_data = enrich_step_ingredients_from_main_list(recipe_data) # This function is removed below
+
+        # 3. Check for ingredient anomalies (now on the first step's ingredients)
         anomalies = check_ingredient_anomalies(recipe_data)
         if anomalies:
             logger.warning(f"Detected {len(anomalies)} potential ingredient anomalies for {os.path.basename(json_file_path)}")
@@ -105,7 +103,6 @@ def post_process_create_recipe_json(json_file_path, send_notification_func=None)
         else:
             logger.info(f"No ingredient anomalies detected for {os.path.basename(json_file_path)}")
 
-        # --- IMPORTANT: We NO LONGER add 'warnings' field to JSON output ---
         # Save the modified JSON back to the same path
         with open(json_file_path, 'w', encoding='utf-8') as f:
             json.dump(recipe_data, f, indent=2, ensure_ascii=False)
@@ -122,3 +119,5 @@ def post_process_create_recipe_json(json_file_path, send_notification_func=None)
     except Exception as e:
         logger.exception(f"An unexpected error occurred during post-processing of {json_file_path}: {e}")
         return False
+
+# REMOVED the enrich_step_ingredients_from_main_list function as it's no longer needed.
