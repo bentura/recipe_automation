@@ -2,5 +2,7 @@ watchdog
 Pillow
 pytesseract
 pdfminer.six
+requests
 google-generativeai # Or openai for OpenAI API
 python-dotenv # For loading .env file
+google-cloud-vision

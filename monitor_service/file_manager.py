@@ -1,3 +1,4 @@
+# monitor_service/file_manager.py
 import os
 import shutil
 import json
@@ -13,6 +14,23 @@ def save_json_file(json_data, output_path):
         logger.info(f"JSON saved to {output_path}")
     except Exception as e:
         logger.error(f"Failed to save JSON to {output_path}: {e}")
+
+def load_json_file(input_path):
+    """Loads a JSON file from the given path and returns its content as a dictionary."""
+    try:
+        with open(input_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        logger.debug(f"JSON loaded from {input_path}")
+        return data
+    except FileNotFoundError:
+        logger.error(f"JSON file not found at {input_path}")
+        return None
+    except json.JSONDecodeError as e:
+        logger.error(f"Invalid JSON in {input_path}: {e}")
+        return None
+    except Exception as e:
+        logger.exception(f"An unexpected error occurred while loading JSON from {input_path}: {e}")
+        return None
 
 def move_to_archive(source_path, archive_dir, success=True):
     """Moves a processed file to the archive directory, adding a status prefix."""

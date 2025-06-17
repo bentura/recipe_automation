@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   recipe_monitor:
     build:
@@ -7,10 +5,10 @@ services:
       dockerfile: Dockerfile
     container_name: recipe_monitor_app
     volumes:
-      - ./data/input:/app/input # Incoming JPGs/PDFs
-      - ./data/output:/app/output # Generated JSON files
-      - ./data/archive:/app/archive # Processed original files
-      - ./logs:/app/logs # Log files
+      - /mnt/recipe_automation/data/input:/app/input # Incoming JPGs/PDFs
+      - /mnt/recipe_automation/data/output:/app/output # Generated JSON files
+      - /mnt/recipe_automation/data/archive:/app/archive # Processed original files
+      - /mnt/recipe_automation/data/logs:/app/logs # Log files
     env_file:
       - .env # For API keys and other secrets
     depends_on:
