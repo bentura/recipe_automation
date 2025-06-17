@@ -10,7 +10,7 @@ import ocr_utils
 import llm_processor
 import file_manager
 import post_processor
-import notifier # This import makes Pushover functionality available
+import notifier
 import api_sender 
 
 # Load environment variables from .env file
@@ -24,7 +24,7 @@ LOG_DIR = "/app/logs"
 LOG_FILE = os.path.join(LOG_DIR, "recipe_processor.log")
 
 # API Configuration (will be read from .env)
-API_ENDPOINT = os.getenv("API_ENDPOINT", "http://192.168.68.62:8002/api/recipe/") # Default or override in .env
+API_ENDPOINT = os.getenv("API_ENDPOINT", "http://192.168.68.62:8002/api/recipe/") 
 API_USERNAME = os.getenv("API_USERNAME")
 API_PASSWORD = os.getenv("API_PASSWORD")
 
@@ -73,24 +73,27 @@ class RecipeFileHandler(FileSystemEventHandler):
                 file_manager.move_to_archive(file_path, ARCHIVE_DIR, success=False)
                 return
 
-            # Save raw OCR text for debugging
-            raw_text_output_file = os.path.join(LOG_DIR, os.path.splitext(file_name)[0] + "_raw_ocr.txt")
-            logger.debug(f"Attempting to save raw OCR text to: {raw_text_output_file}")
-            with open(raw_text_output_file, 'w', encoding='utf-8') as f:
-                f.write(raw_text)
-            logger.info(f"Raw OCR text saved to: {raw_text_output_file}")
-
             logger.info(f"Text extracted from {file_name}. Proceeding to LLM conversion(s)...")
 
             # --- Create timestamped output subfolder ---
-            # Using current time in Birmingham for the folder name
-            now_bst = datetime.now() # Current time in local timezone (BST)
+            # Current time in Birmingham, UK
+            now_bst = datetime.now() 
             timestamp_folder_name = now_bst.strftime("%Y-%m-%d_%H%M%S")
             
             current_output_sub_dir = os.path.join(OUTPUT_DIR, timestamp_folder_name)
             os.makedirs(current_output_sub_dir, exist_ok=True)
             logger.info(f"Created output subfolder: {current_output_sub_dir}")
             # --- End timestamped subfolder setup ---
+
+            # --- MOVE RAW OCR TEXT SAVING HERE ---
+            # Now save the raw OCR text into the newly created timestamped subfolder
+            raw_text_output_file = os.path.join(current_output_sub_dir, os.path.splitext(file_name)[0] + "_raw_ocr.txt")
+            logger.debug(f"Attempting to save raw OCR text to: {raw_text_output_file}")
+            with open(raw_text_output_file, 'w', encoding='utf-8') as f:
+                f.write(raw_text)
+            logger.info(f"Raw OCR text saved to: {raw_text_output_file}")
+            # --- END MOVE ---
+
 
             # Flag to track if API send was attempted and successful
             api_send_successful = False
@@ -126,7 +129,7 @@ class RecipeFileHandler(FileSystemEventHandler):
                 if post_process_success:
                     logger.info("createRecipe JSON post-processing completed successfully.")
                     
-                    # --- NEW: Send to External API after post-processing ---
+                    # --- Send to External API after post-processing ---
                     logger.info("Attempting to send processed createRecipe JSON to external API...")
                     # Load the JSON from disk again to ensure post-processing changes are included
                     loaded_processed_json = file_manager.load_json_file(create_recipe_output_path) 

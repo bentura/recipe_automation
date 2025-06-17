@@ -23,7 +23,7 @@ services:
     ports:
       - "8000:8000" # Map container port 8000 to host port 8000
     volumes:
-      - ./logs:/app/logs # Access logs from monitor service
+      - /mnt/recipe_automation/data/logs:/app/logs # Access logs from monitor service
     restart: unless-stopped
 
 volumes:
